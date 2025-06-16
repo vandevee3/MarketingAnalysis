@@ -68,10 +68,22 @@ else
   echo "✅ pyenv already installed at ~/.pyenv"
 fi
 
-# Load pyenv environment
-export PATH="$HOME/.pyenv/bin:$PATH"
-eval "$(pyenv init --path)"
-eval "$(pyenv init -)"
+# Load pyenv environment if pyenv command exists or ~/.pyenv/bin is in PATH
+if command -v pyenv >/dev/null 2>&1 || [ -d "$HOME/.pyenv" ]; then
+  export PATH="$HOME/.pyenv/bin:$PATH"
+  eval "$(pyenv init --path)"
+  eval "$(pyenv init -)"
+else
+  echo "❌ pyenv not found, skipping pyenv init"
+fi
+
+# Fix pyenv permissions if needed
+if [ -d "$HOME/.pyenv/shims" ] && [ ! -w "$HOME/.pyenv/shims" ]; then
+  echo "🔧 Fixing pyenv shims directory permissions..."
+  sudo chown -R "$USER:$USER" "$HOME/.pyenv"
+  chmod -R u+w "$HOME/.pyenv/shims"
+fi
+
 
 # === STEP 3: Install Python 3.11.5 ===
 TARGET_PYTHON_VERSION="3.11.5"
@@ -86,12 +98,24 @@ fi
 pyenv global "$TARGET_PYTHON_VERSION"
 
 # === STEP 4: Create virtual environment ===
+# Usage: ./setup.sh [--clean]
+RECREATE_ENV=false
+if [[ "$1" == "--clean" ]]; then
+  RECREATE_ENV=true
+fi
+
+if $RECREATE_ENV && [ -d "env" ]; then
+  echo "🧹 Removing existing virtual environment..."
+  rm -rf env
+fi
+
 if [ ! -d "env" ]; then
-  echo "🧪 Creating virtual environment 'env'..."
+  echo "🧪 Creating new virtual environment..."
   python -m venv env
 else
-  echo "✅ Virtual environment 'env' already exists"
+  echo "✅ Reusing existing virtual environment"
 fi
+
 
 # === STEP 5: Activate and install Python libraries ===
 echo "📦 Activating environment and verifying packages..."
@@ -100,8 +124,8 @@ pip install --upgrade pip
 
 # === STEP 6: Install Python packages ===
 PACKAGES=(
+  "numpy==1.26.4"        # ⬅️ Compatible with GCC 7.5
   "pandas==2.2.2"
-  "numpy==1.26.4"
   "scipy==1.13.1"
   "pyarrow==15.0.2"
   "openpyxl==3.1.2"
@@ -116,7 +140,10 @@ PACKAGES=(
   "missingno==0.5.2"
   "tqdm==4.66.4"
   "pyjanitor==0.25.0"
+  "jupyter==1.0.0"
+  "ipykernel==6.29.4"
 )
+
 
 for entry in "${PACKAGES[@]}"; do
   pkg=$(echo "$entry" | cut -d= -f1)
@@ -163,11 +190,6 @@ else
   pip install scikit-build-core
   pip install lightgbm==$LGBM_VERSION_REQUIRED --no-build-isolation
 fi
-
-
-
-pip install scikit-build-core
-pip install lightgbm==4.3.0 --no-build-isolation
 
 echo ""
 echo "🎉 Environment setup complete!"
