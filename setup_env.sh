@@ -53,7 +53,6 @@ elif [ "$PKG_MANAGER" = "brew" ]; then
       echo "✅ $pkg already installed"
     fi
   done
-
 fi
 
 # === STEP 2: Install pyenv ===
@@ -95,38 +94,40 @@ echo "📦 Activating environment and verifying packages..."
 source env/bin/activate
 pip install --upgrade pip
 
-declare -A packages=(
-  [pandas]=2.2.2
-  [numpy]=1.26.4
-  [scipy]=1.13.1
-  [pyarrow]=15.0.2
-  [openpyxl]=3.1.2
-  [matplotlib]=3.8.4
-  [seaborn]=0.13.2
-  [plotly]=5.21.0
-  [altair]=5.3.0
-  [scikit-learn]=1.4.2
-  [xgboost]=2.0.3
-  [lightgbm]=4.3.0
-  [catboost]=1.2.5
-  [statsmodels]=0.14.1
-  [missingno]=0.5.2
-  [tqdm]=4.66.4
-  [pyjanitor]=0.25.0
+# Define packages as "name==version" strings (portable for all shells)
+PACKAGES=(
+  "pandas==2.2.2"
+  "numpy==1.26.4"
+  "scipy==1.13.1"
+  "pyarrow==15.0.2"
+  "openpyxl==3.1.2"
+  "matplotlib==3.8.4"
+  "seaborn==0.13.2"
+  "plotly==5.21.0"
+  "altair==5.3.0"
+  "scikit-learn==1.4.2"
+  "xgboost==2.0.3"
+  "lightgbm==4.3.0"
+  "catboost==1.2.5"
+  "statsmodels==0.14.1"
+  "missingno==0.5.2"
+  "tqdm==4.66.4"
+  "pyjanitor==0.25.0"
 )
 
-for pkg in "${!packages[@]}"; do
-  desired_version="${packages[$pkg]}"
-  installed_version=$(pip show "$pkg" 2>/dev/null | grep ^Version: | awk '{print $2}')
+for entry in "${PACKAGES[@]}"; do
+  pkg=$(echo "$entry" | cut -d= -f1)
+  version=$(echo "$entry" | cut -d= -f3)
+  installed=$(pip show "$pkg" 2>/dev/null | grep ^Version: | awk '{print $2}')
 
-  if [ -z "$installed_version" ]; then
-    echo "📥 Installing $pkg==$desired_version"
-    pip install "$pkg==$desired_version"
-  elif [ "$installed_version" != "$desired_version" ]; then
-    echo "🔁 Upgrading $pkg from $installed_version to $desired_version"
-    pip install --upgrade "$pkg==$desired_version"
+  if [ -z "$installed" ]; then
+    echo "📥 Installing $pkg==$version"
+    pip install "$pkg==$version"
+  elif [ "$installed" != "$version" ]; then
+    echo "🔁 Upgrading $pkg from $installed to $version"
+    pip install --upgrade "$pkg==$version"
   else
-    echo "✅ $pkg==$desired_version already installed"
+    echo "✅ $pkg==$version already installed"
   fi
 done
 
