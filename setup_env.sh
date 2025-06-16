@@ -12,7 +12,7 @@ else
   exit 1
 fi
 
-# === STEP 1: Install dependencies ===
+# === STEP 1: Install system dependencies ===
 echo "🔧 Checking dependencies for pyenv and Python build on $PKG_MANAGER..."
 
 if [ "$PKG_MANAGER" = "apt" ]; then
@@ -22,7 +22,7 @@ if [ "$PKG_MANAGER" = "apt" ]; then
     build-essential curl git libssl-dev zlib1g-dev libbz2-dev
     libreadline-dev libsqlite3-dev wget llvm libncurses5-dev
     libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev
-    python3-openssl
+    python3-openssl cmake
   )
 
   for pkg in "${REQUIRED_PACKAGES[@]}"; do
@@ -35,14 +35,13 @@ if [ "$PKG_MANAGER" = "apt" ]; then
   done
 
 elif [ "$PKG_MANAGER" = "brew" ]; then
-  # Check if Homebrew is installed
   if ! command -v brew >/dev/null 2>&1; then
     echo "🍺 Homebrew not found, installing..."
     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
   fi
 
   BREW_PACKAGES=(
-    openssl readline sqlite3 xz zlib tcl-tk llvm
+    openssl readline sqlite3 xz zlib tcl-tk llvm libomp cmake
   )
 
   for pkg in "${BREW_PACKAGES[@]}"; do
@@ -53,6 +52,12 @@ elif [ "$PKG_MANAGER" = "brew" ]; then
       echo "✅ $pkg already installed"
     fi
   done
+
+  export CXX=/usr/bin/clang++
+  export CC=/usr/bin/clang
+  export LDFLAGS="-L/opt/homebrew/opt/libomp/lib"
+  export CPPFLAGS="-I/opt/homebrew/opt/libomp/include"
+  export PKG_CONFIG_PATH="/opt/homebrew/opt/libomp/lib/pkgconfig"
 fi
 
 # === STEP 2: Install pyenv ===
@@ -68,7 +73,7 @@ export PATH="$HOME/.pyenv/bin:$PATH"
 eval "$(pyenv init --path)"
 eval "$(pyenv init -)"
 
-# === STEP 3: Install Python 3.11.5 if not already or outdated ===
+# === STEP 3: Install Python 3.11.5 ===
 TARGET_PYTHON_VERSION="3.11.5"
 
 if ! pyenv versions --bare | grep -q "^$TARGET_PYTHON_VERSION$"; then
@@ -90,11 +95,10 @@ fi
 
 # === STEP 5: Activate and install Python libraries ===
 echo "📦 Activating environment and verifying packages..."
-
 source env/bin/activate
 pip install --upgrade pip
 
-# Define packages as "name==version" strings (portable for all shells)
+# === STEP 6: Install Python packages ===
 PACKAGES=(
   "pandas==2.2.2"
   "numpy==1.26.4"
@@ -107,7 +111,6 @@ PACKAGES=(
   "altair==5.3.0"
   "scikit-learn==1.4.2"
   "xgboost==2.0.3"
-  "lightgbm==4.3.0"
   "catboost==1.2.5"
   "statsmodels==0.14.1"
   "missingno==0.5.2"
@@ -117,19 +120,54 @@ PACKAGES=(
 
 for entry in "${PACKAGES[@]}"; do
   pkg=$(echo "$entry" | cut -d= -f1)
-  version=$(echo "$entry" | cut -d= -f3)
-  installed=$(pip show "$pkg" 2>/dev/null | grep ^Version: | awk '{print $2}')
+  required_version=$(echo "$entry" | cut -d= -f3)
 
-  if [ -z "$installed" ]; then
-    echo "📥 Installing $pkg==$version"
-    pip install "$pkg==$version"
-  elif [ "$installed" != "$version" ]; then
-    echo "🔁 Upgrading $pkg from $installed to $version"
-    pip install --upgrade "$pkg==$version"
+  current_version=$(pip freeze | grep -i "^${pkg}==" | cut -d= -f3)
+
+  if [[ "$current_version" == "$required_version" ]]; then
+    echo "✅ $pkg==$required_version already installed"
   else
-    echo "✅ $pkg==$version already installed"
+    if [ -z "$current_version" ]; then
+      echo "📥 Installing $pkg==$required_version"
+    else
+      echo "🔁 Upgrading $pkg from $current_version to $required_version"
+    fi
+    pip install "$pkg==$required_version"
   fi
 done
+
+# === STEP 7: Special install for LightGBM ===
+echo "⚙️  Verifying LightGBM==4.3.0 (requires CMake >= 3.18)..."
+
+LGBM_VERSION_REQUIRED="4.3.0"
+LGBM_CURRENT=$(pip freeze | grep -i "^lightgbm==" | cut -d= -f3)
+
+if [[ "$LGBM_CURRENT" == "$LGBM_VERSION_REQUIRED" ]]; then
+  echo "✅ lightgbm==$LGBM_VERSION_REQUIRED already installed"
+else
+  if ! command -v cmake >/dev/null 2>&1; then
+    echo "❌ CMake not found. Please install CMake >= 3.18"
+    exit 1
+  fi
+
+  CMAKE_VERSION=$(cmake --version | head -n1 | awk '{print $3}')
+  REQUIRED_CMAKE="3.18"
+  version_check=$(printf "%s\n%s" "$REQUIRED_CMAKE" "$CMAKE_VERSION" | sort -V | head -n1)
+
+  if [[ "$version_check" != "$REQUIRED_CMAKE" ]]; then
+    echo "❌ CMake version $CMAKE_VERSION is too old. Upgrade to >= $REQUIRED_CMAKE"
+    exit 1
+  fi
+
+  echo "📥 Installing LightGBM==$LGBM_VERSION_REQUIRED..."
+  pip install scikit-build-core
+  pip install lightgbm==$LGBM_VERSION_REQUIRED --no-build-isolation
+fi
+
+
+
+pip install scikit-build-core
+pip install lightgbm==4.3.0 --no-build-isolation
 
 echo ""
 echo "🎉 Environment setup complete!"
