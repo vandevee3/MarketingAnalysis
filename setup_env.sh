@@ -2,26 +2,59 @@
 
 set -e  # Exit on any error
 
-# === STEP 1: Install pyenv dependencies ===
-echo "🔧 Checking dependencies for pyenv and Python build..."
+# === Detect OS and set package manager ===
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+  PKG_MANAGER="apt"
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+  PKG_MANAGER="brew"
+else
+  echo "❌ Unsupported OS: $OSTYPE"
+  exit 1
+fi
 
-sudo apt update
+# === STEP 1: Install dependencies ===
+echo "🔧 Checking dependencies for pyenv and Python build on $PKG_MANAGER..."
 
-REQUIRED_PACKAGES=(
-  build-essential curl git libssl-dev zlib1g-dev libbz2-dev
-  libreadline-dev libsqlite3-dev wget llvm libncurses5-dev
-  libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev
-  python3-openssl
-)
+if [ "$PKG_MANAGER" = "apt" ]; then
+  sudo apt update
 
-for pkg in "${REQUIRED_PACKAGES[@]}"; do
-  if ! dpkg -s "$pkg" >/dev/null 2>&1; then
-    echo "📦 Installing $pkg"
-    sudo apt install -y "$pkg"
-  else
-    echo "✅ $pkg already installed"
+  REQUIRED_PACKAGES=(
+    build-essential curl git libssl-dev zlib1g-dev libbz2-dev
+    libreadline-dev libsqlite3-dev wget llvm libncurses5-dev
+    libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev
+    python3-openssl
+  )
+
+  for pkg in "${REQUIRED_PACKAGES[@]}"; do
+    if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+      echo "📦 Installing $pkg"
+      sudo apt install -y "$pkg"
+    else
+      echo "✅ $pkg already installed"
+    fi
+  done
+
+elif [ "$PKG_MANAGER" = "brew" ]; then
+  # Check if Homebrew is installed
+  if ! command -v brew >/dev/null 2>&1; then
+    echo "🍺 Homebrew not found, installing..."
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
   fi
-done
+
+  BREW_PACKAGES=(
+    openssl readline sqlite3 xz zlib tcl-tk llvm
+  )
+
+  for pkg in "${BREW_PACKAGES[@]}"; do
+    if ! brew list "$pkg" >/dev/null 2>&1; then
+      echo "📦 Installing $pkg"
+      brew install "$pkg"
+    else
+      echo "✅ $pkg already installed"
+    fi
+  done
+
+fi
 
 # === STEP 2: Install pyenv ===
 if [ ! -d "$HOME/.pyenv" ]; then
