@@ -1,0 +1,4 @@
+1. Defined more details data validation (SPECIALLY ADDING DATA VALIDATION CHECKLIST)
+2. Cleaning data more
+3. Deeper in coverage more information from data
+4. Learning about AB Testing
