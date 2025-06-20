@@ -122,33 +122,23 @@ echo "📦 Activating environment and verifying packages..."
 source env/bin/activate
 pip install --upgrade pip
 
-# === STEP 6: Install Python packages ===
-PACKAGES=(
-  "numpy==1.26.4"        # ⬅️ Compatible with GCC 7.5
-  "pandas==2.2.2"
-  "scipy==1.13.1"
-  "pyarrow==15.0.2"
-  "openpyxl==3.1.2"
-  "matplotlib==3.8.4"
-  "seaborn==0.13.2"
-  "plotly==5.21.0"
-  "altair==5.3.0"
-  "scikit-learn==1.4.2"
-  "xgboost==2.0.3"
-  "catboost==1.2.5"
-  "statsmodels==0.14.1"
-  "missingno==0.5.2"
-  "tqdm==4.66.4"
-  "pyjanitor==0.25.0"
-  "jupyter==1.0.0"
-  "ipykernel==6.29.4"
-)
 
+# === STEP 6: Install Python packages from requirements.txt with check ===
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REQ_FILE="$SCRIPT_DIR/requirements.txt"
 
-for entry in "${PACKAGES[@]}"; do
-  pkg=$(echo "$entry" | cut -d= -f1)
-  required_version=$(echo "$entry" | cut -d= -f3)
+if [ ! -f "$REQ_FILE" ]; then
+  echo "❌ requirements.txt not found at $REQ_FILE"
+  exit 1
+fi
 
+echo "📄 Installing from requirements.txt with version checks..."
+
+while IFS= read -r line || [[ -n "$line" ]]; do
+  [[ -z "$line" || "$line" == \#* ]] && continue
+
+  pkg=$(echo "$line" | cut -d= -f1)
+  required_version=$(echo "$line" | cut -d= -f3)
   current_version=$(pip freeze | grep -i "^${pkg}==" | cut -d= -f3)
 
   if [[ "$current_version" == "$required_version" ]]; then
@@ -161,7 +151,8 @@ for entry in "${PACKAGES[@]}"; do
     fi
     pip install "$pkg==$required_version"
   fi
-done
+done < "$REQ_FILE"
+
 
 # === STEP 7: Special install for LightGBM ===
 echo "⚙️  Verifying LightGBM==4.3.0 (requires CMake >= 3.18)..."
